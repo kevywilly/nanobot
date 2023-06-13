@@ -11,10 +11,15 @@ StereoCamera::StereoCamera() {
 }
 
 StereoCamera::~StereoCamera() {
-    if(_cap_l != nullptr) {
+   release();
+}
+
+void StereoCamera::release() {
+    if(_cap_l != nullptr && _cap_l->isOpened()) {
         _cap_l->release();
     }
-    if(_cap_r != nullptr) {
+
+    if(_cap_r != nullptr && _cap_r->isOpened()) {
         _cap_r->release();
     }
 }
