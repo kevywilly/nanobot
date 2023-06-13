@@ -47,6 +47,7 @@ public:
 
     StereoCamera();
 
+    virtual ~StereoCamera();
 
 
 };
