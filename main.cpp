@@ -6,5 +6,9 @@ int main() {
 
     StereoCamera h;
 
+    while(1) {
+
+    }
+    
     return 0;
 }
