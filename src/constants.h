@@ -1,0 +1,15 @@
+//
+// Created by Kevin Williams on 6/13/23.
+//
+
+#ifndef NANOBOT_CONSTANTS_H
+#define NANOBOT_CONSTANTS_H
+
+#define CAPTURE_WIDTH 1920
+#define CAPTURE_HEIGHT 1080
+#define DISPLAY_WIDTH 640
+#define DISPLAY_HEIGHT 360
+#define FRAMERATE 30
+#define FLIP_METHOD 2
+
+#endif //NANOBOT_CONSTANTS_H
