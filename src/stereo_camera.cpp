@@ -24,3 +24,17 @@ void StereoCamera::release() {
     }
 }
 
+void StereoCamera::capture() {
+  cv::Mat img_left;
+  cv::Mat img_right;
+  bool r1 = _cap_l->read(img_left);
+  bool r2 = _cap_r->read(img_right);
+
+  if(!(r1 && r2)) {
+    printf("couldn't read image from camera");
+  } else {
+    value_left = img_left;
+    value_right = img_right;
+  }
+
+}

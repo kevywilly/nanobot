@@ -3,9 +3,6 @@
 #include "parson.h"
 
 static const char *s_http_addr = "http://0.0.0.0:8000";    // HTTP port
-static const char *s_https_addr = "https://0.0.0.0:8443";  // HTTPS port
-static const char *s_root_dir = ".";
-
 static const char * JSON_HEADER = "Content-Type: application/json\r\n";
 
 class WebServer {

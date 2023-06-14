@@ -17,11 +17,16 @@ class StereoCamera {
 
 public:
 
-    StereoCamera();
+  cv::Mat value_left;
+  cv::Mat value_right;
+
+  StereoCamera();
 
     virtual ~StereoCamera();
 
     void release();
+
+    void capture();
 
 private:
     cv::VideoCapture * _cap_l;
@@ -49,6 +54,8 @@ private:
             exit(-1);
         }
     }
+
+
 
 };
 
