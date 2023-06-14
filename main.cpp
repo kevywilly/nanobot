@@ -21,7 +21,7 @@ int main(void) {
 
   StereoCamera * camera;
 
-#if __APPLE__
+#if __linux__
   camera = new StereoCamera();
   camera->capture();
 #else
