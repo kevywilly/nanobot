@@ -33,8 +33,7 @@ void StereoCamera::capture() {
   if(!(r1 && r2)) {
     printf("couldn't read image from camera");
   } else {
-    value_left = img_left;
-    value_right = img_right;
+    printf("read camera");
   }
 
 }
