@@ -27,5 +27,5 @@ include_directories(${OpenCV_INCLUDE_DIR} include)
 #include_directories(src)
 
 # Build the calibration tool
-add_executable(nanobot main.cpp src/StereoCamera.cpp)
+add_executable(nanobot main.cpp src/stereo_camera.cpp src/mongoose.c src/parson.c)
 target_link_libraries(nanobot ${OpenCV_LIBRARIES})

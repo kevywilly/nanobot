@@ -2,7 +2,7 @@
 // Created by Kevin Williams on 6/13/23.
 //
 
-#include "StereoCamera.h"
+#include "stereo_camera.h"
 #include "constants.h"
 
 StereoCamera::StereoCamera() {
