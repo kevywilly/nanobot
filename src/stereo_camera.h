@@ -14,7 +14,7 @@
 #include <atomic>
 #include <functional>
 #include <chrono>
-
+#include "imagemapper.h"
 using namespace std;
 
 class StereoCamera {
@@ -23,10 +23,19 @@ public:
 
     uint8_t device1 = 0;
     uint8_t device2 = 1;
+
     cv::Mat value1;
     cv::Mat value2;
+
+    cv::Mat mapped_left;
+    cv::Mat mapped_right;
+    cv::Mat mapped_3d;
+
     cv::VideoCapture * cap1;
     cv::VideoCapture * cap2;
+
+    ImageMapper * mapper;
+
     bool running() const 
     {
         return mRunning.load();
@@ -34,8 +43,10 @@ public:
 
     StereoCamera() {
 
-        this->cap1 = new cv::VideoCapture(_gst_pipeline(device1, nb::kDefaultCaptureSettings));
-        this->cap2 = new cv::VideoCapture(_gst_pipeline(device2, nb::kDefaultCaptureSettings));
+        mapper = new ImageMapper();
+
+        this->cap1 = new cv::VideoCapture(_gst_pipeline(device1, nano::kDefaultCaptureSettings));
+        this->cap2 = new cv::VideoCapture(_gst_pipeline(device2, nano::kDefaultCaptureSettings));
 
         printf("\nOPENING CAMERAS...");
 
@@ -157,8 +168,10 @@ public:
             bool r1 = cap1->read(img1);
             bool r2 = cap2->read(img2);
             if(r1 && r2) {
-                value1 = img1;
-                value2 = img2;
+                img1.copyTo(value1);
+                img2.copyTo(value2);
+                mapper->remap(value1, value2, mapped_left, mapped_right);
+                mapper->map_3d(mapped_left, mapped_right, mapped_3d);
                 return true;
             }
         }

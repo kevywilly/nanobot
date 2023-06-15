@@ -12,6 +12,8 @@
 //    1. See https://mongoose.ws/tutorials/tls/#how-to-build
 //    2. curl -k https://127.0.0.1:8443
 // https://towardsdatascience.com/torch-and-torchvision-c-installation-and-debugging-on-linux-263676c38fa2
+// https://mongoose.ws/documentation/tutorials/video-stream/
+// https://crowcpp.org/master/
 
 #include "stereo_camera.h"
 #include <unistd.h>
@@ -21,7 +23,8 @@
 #include "parson.h"
 #include "mongoose.h"
 
-enum CameraId {left, right, stereo};
+
+enum CameraId {left, right, stereo, stereo3d};
 
 static const char *s_http_addr = "http://0.0.0.0:8000";    // HTTP port
 static const char * JSON_HEADER = (
@@ -79,64 +82,96 @@ static void handle_get_image(struct mg_connection *c, CameraId id) {
   std::vector<uchar> buf;
   switch(id) {
     case CameraId::left:
-      nano::bgr8_to_jpeg(camera->value1, buf);
+      nano::bgr8_to_jpeg(camera->mapped_left, buf);
       break;
     case CameraId::right:
-      nano::bgr8_to_jpeg(camera->value2, buf);
+      nano::bgr8_to_jpeg(camera->mapped_right, buf);
+      break;
+    case CameraId::stereo3d:
+      nano::bgr8_to_jpeg(camera->mapped_3d, buf);
       break;
     default:
-      nano::stereo_to_jpeg(camera->value1, camera->value2, buf);
+      nano::stereo_to_jpeg(camera->mapped_left, camera->mapped_right, buf);
   }
 
   size_t size = buf.size();
+  char * data = (char*)buf.data();
 
   add_default_headers(c);
   add_jpeg_header(c);
   add_size_header(c, size);
-  mg_send(c, (char*)buf.data(), size);
+  mg_send(c, data, size);
   mg_send(c, "\r\n", 2);
+  
   
 }
 
-static void web_event_handler(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
-  if (ev == MG_EV_HTTP_MSG) {
-    struct mg_http_message *hm = (struct mg_http_message *) ev_data;
-    if (mg_http_match_uri(hm, "/")) {
-      handle_home(c);
-    } else if (mg_http_match_uri(hm, "/api/video1")) {
-    c->data[0] = 'S';  // Mark that connection as live streamer
-    mg_printf(
+
+static void handle_get_stream(struct mg_connection *c) {
+  mg_printf(
         c, "%s",
         "HTTP/1.0 200 OK\r\n"
         "Cache-Control: no-cache\r\n"
         "Pragma: no-cache\r\nExpires: Thu, 01 Dec 1994 16:00:00 GMT\r\n"
         "Content-Type: multipart/x-mixed-replace; boundary=--foo\r\n\r\n");
+   
+        std::vector<uchar> buf;
+        while(1) {
+        nano::bgr8_to_jpeg(camera->mapped_3d, buf);
+        size_t size = buf.size();
+        
+        if(size > 0) {
+          mg_http_reply(c, 200, "--foo\r\nContent-Type: image/jpeg\r\n", "%.*s\n", (unsigned long) size, (char*)buf.data());
+    
+        }
+        }
+
+        
+        
+
+}
+
+static void web_event_handler(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+  if (ev == MG_EV_HTTP_MSG) {
+    struct mg_http_message *hm = (struct mg_http_message *) ev_data;
+  if (mg_http_match_uri(hm, "/")) {
+      handle_home(c);
+  } else if (mg_http_match_uri(hm, "/api/video1")) {
+      handle_get_stream(c);
   } else if(mg_http_match_uri(hm, "/api/images/left"))  {
     handle_get_image(c, CameraId::left);
   } else if(mg_http_match_uri(hm, "/api/images/right"))  {
     handle_get_image(c, CameraId::right);
   } else if(mg_http_match_uri(hm, "/api/images/stereo"))  {
     handle_get_image(c, CameraId::stereo);
-  }else {
+  } else if(mg_http_match_uri(hm, "/api/images/3d"))  {
+    handle_get_image(c, CameraId::stereo3d);
+  } else {
       handle_not_found(c);
     }
   }
   (void) fn_data;
 }
 
+
+
+
 int main(void) {
 
+ 
   camera = new StereoCamera();
-
 
   camera->run();
 
-
   struct mg_mgr mgr;                            // Event manager
-  mg_log_set(MG_LL_DEBUG);              // Set log level
-  mg_mgr_init(&mgr);                            // Initialise event manager
+
+  mg_log_set(MG_LL_DEBUG);                        // Set log level
+  mg_mgr_init(&mgr);                              // Initialise event manager
   mg_http_listen(&mgr, s_http_addr, web_event_handler, NULL);  // Create HTTP listener
+  
+
   for (;;) mg_mgr_poll(&mgr, 1000);                    // Infinite event loop
+
   mg_mgr_free(&mgr);
   
   camera->stop();

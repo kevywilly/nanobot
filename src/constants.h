@@ -10,7 +10,7 @@
 #include "types.h"
 
 
-namespace nb {
+namespace nano {
     const capture_settings_t kDefaultCaptureSettings  = {1920,1080,640,360,3,2};
             
 }
