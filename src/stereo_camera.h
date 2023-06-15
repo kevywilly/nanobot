@@ -1,40 +1,143 @@
 //
 // Created by Kevin Williams on 6/13/23.
+// https://www.cppstories.com/2019/12/threading-loopers-cpp17/
 //
 
-#ifndef NANOBOT_STEREOCAMERA_H
-#define NANOBOT_STEREOCAMERA_H
+#pragma once
 
 #include <opencv2/opencv.hpp>
 #include <stdlib.h>
+#include <unistd.h>
 #include "types.h"
 #include "constants.h"
+#include <thread>
+#include <atomic>
+#include <functional>
+#include <chrono>
 
 using namespace std;
-
 
 class StereoCamera {
 
 public:
 
-  cv::Mat value_left;
-  cv::Mat value_right;
+    uint8_t device1 = 0;
+    uint8_t device2 = 1;
+    cv::Mat value1;
+    cv::Mat value2;
+    cv::VideoCapture * cap1;
+    cv::VideoCapture * cap2;
+    bool running() const 
+    {
+        return mRunning.load();
+    }
 
-  StereoCamera();
+    StereoCamera() {
 
-    virtual ~StereoCamera();
+        this->cap1 = new cv::VideoCapture(_gst_pipeline(device1, nb::kDefaultCaptureSettings));
+        this->cap2 = new cv::VideoCapture(_gst_pipeline(device2, nb::kDefaultCaptureSettings));
 
-    void release();
+        printf("\nOPENING CAMERAS...");
 
-    void capture();
+        if(!cap1->isOpened() || !cap2->isOpened()){
+            printf("...FAIL");
+            exit(0);
+        }
+    
+        printf("...SUCCESS.\n\n");
 
-private:
-    cv::VideoCapture * _cap_l;
-    cv::VideoCapture * _cap_r;
-    uint8_t _left_id = 0;
-    uint8_t _right_id = 1;
+        printf("READING CAMERAS...");
+        bool r1 = cap1->read(value1);
+        bool r2 = cap2->read(value2);
 
-    static string _gst_pipeline(
+        if(!r1 || !r2) {
+            printf("...FAIL");
+        } else {
+            cv::imwrite("v1.jpeg",value1);
+            cv::imwrite("v2.jpeg",value2);
+            printf("...SUCCESS.\n\n");
+        }
+    }
+
+    virtual ~StereoCamera() {
+        abortAndJoin();
+        release();
+    }
+
+    void release(){
+        cap1->release();
+        cap2->release();
+    }
+
+    bool capture(cv::Mat & m1, cv::Mat & m2){
+
+        bool r1 = cap1->read(m1);
+        bool r2 = cap2->read(m2);
+
+        if(!(r1 && r2)) {
+            printf("couldn't read image from camera");
+            return false;
+        } else {
+            printf("got values");
+        }
+
+        return true;
+    }
+
+    void save_image(){
+
+        cv::Mat im1;
+        cv::Mat im2;
+
+        if(cap1->read(im1)){
+            cv::imwrite("im1.png", im1);
+        } else {
+            printf("couldn't read image l");
+        }
+
+        if(cap1->read(im2)){
+            cv::imwrite("im2.png", im2);
+        } else {
+            printf("couldn't read image r");
+        }
+        
+
+        cap2->read(im2);
+
+        
+        cv::imwrite("im1.png", im1);
+        cv::imwrite("im2.png", im2);
+
+    }
+    
+    void loop() {
+        mRunning.store(true);
+
+        while(true) {
+            try {
+                std::this_thread::sleep_for(std::chrono::milliseconds(500));
+                _read();
+            } catch (...) {
+                
+            }
+        }
+
+        mRunning.store(false);
+    }
+
+    void run(){
+        try {
+            mThread = std::thread(&StereoCamera::loop, this);
+        } catch(...) {
+            printf("could not run thread");
+        }
+    }
+
+    void stop(){
+        abortAndJoin();
+    }
+
+    string _gst_pipeline(
             int device_id,
             const capture_settings_t &settings
     ) {
@@ -44,20 +147,40 @@ private:
             std::to_string(settings.display_height) + ", format=(string)BGRx ! videoconvert ! video/x-raw, format=(string)BGR ! appsink";
     }
 
-    static void _start_camera(uint8_t id, cv::VideoCapture * cap) {
-        printf("starting camera");
-        cap = new cv::VideoCapture(
-                _gst_pipeline(id,nb::kDefaultCaptureSettings)
-        );
-        if(!cap->isOpened()) {
-            printf("Error opening camera %d",id);
-            exit(-1);
+
+    bool _read() {
+        
+        cv::Mat img1;
+        cv::Mat img2;
+
+        if(cap1->isOpened() && cap2->isOpened()) {
+            bool r1 = cap1->read(img1);
+            bool r2 = cap2->read(img2);
+            if(r1 && r2) {
+                value1 = img1;
+                value2 = img2;
+                return true;
+            }
         }
+        return false;
+    
     }
 
+    void abortAndJoin()
+    {
+        mAbortRequested.store(true);
+        if(mThread.joinable())
+        {
+            mThread.join();
+        }
+    }
+    
+private:
 
+    std::thread mThread;
+    std::atomic_bool mRunning;
+    std::atomic_bool mAbortRequested;
 
 };
 
 
-#endif //NANOBOT_STEREOCAMERA_H

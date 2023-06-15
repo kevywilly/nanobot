@@ -11,14 +11,8 @@
 
 
 namespace nb {
-    const capture_settings_t kDefaultCaptureSettings = {
-            .capture_width = 1920,
-            .capture_height = 1080,
-            .display_width = 640,
-            .display_height = 360,
-            .framerate = 30,
-            .flip_method = 2
-    };
+    const capture_settings_t kDefaultCaptureSettings  = {1920,1080,640,360,3,2};
+            
 }
 
 

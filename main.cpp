@@ -11,32 +11,111 @@
 // To enable SSL/TLS (using self-signed certificates in PEM files),
 //    1. See https://mongoose.ws/tutorials/tls/#how-to-build
 //    2. curl -k https://127.0.0.1:8443
+// https://towardsdatascience.com/torch-and-torchvision-c-installation-and-debugging-on-linux-263676c38fa2
 
-#include "src/webserver.h"
-#include "src/stereo_camera.h"
+#include "stereo_camera.h"
+#include <unistd.h>
+#include "nanoutils.h"
+#include <vector>
+#include "globals.h"
+#include "parson.h"
+#include "mongoose.h"
+
+enum CameraId {left, right};
+
+static const char *s_http_addr = "http://0.0.0.0:8000";    // HTTP port
+static const char * JSON_HEADER = "Content-Type: application/json\r\n";
+static const char * JPEG_HEADER = "Content-Type: image/jpeg\r\n";
+
+static void handle_home(struct mg_connection *c) {
+  JSON_Value *root_value = json_value_init_object();
+  JSON_Object *root_object = json_value_get_object(root_value);
+  char *body = NULL;
+  json_object_set_string(root_object, "status", "Hello");
+  body = json_serialize_to_string(root_value);
+  mg_http_reply(c, 200, JSON_HEADER,
+                body);
+  json_free_serialized_string(body);
+  json_value_free(root_value);
+
+}
 
 
+static void handle_not_found(struct mg_connection *c) {
+  JSON_Value *root_value = json_value_init_object();
+  JSON_Object *root_object = json_value_get_object(root_value);
+  char *body = NULL;
+  json_object_set_string(root_object, "status", "Not Found");
+  body = json_serialize_to_string(root_value);
+  mg_http_reply(c, 200, JSON_HEADER,
+                body);
+  json_free_serialized_string(body);
+  json_value_free(root_value);
+}
+
+static void handle_get_image(struct mg_connection *c, CameraId id) {
+  std::vector<uchar> buf;
+  if(id == CameraId::left)
+    nano::bgr8_to_jpeg(camera->value1, buf);
+  else
+    nano::bgr8_to_jpeg(camera->value2, buf);
+
+  size_t size = buf.size();
+
+  mg_printf(
+          c, "%s",
+          "HTTP/1.0 200 OK\r\n"
+          "Cache-Control: no-cache\r\n"
+          "Pragma: no-cache\r\nExpires: Thu, 01 Dec 1994 16:00:00 GMT\r\n"
+          "Content-Type: image/jpeg\r\n"
+          );
+  mg_printf(c,"Content-Length: %lu\r\n\r\n", size);
+  mg_send(c, (char*)buf.data(), size);
+  mg_send(c, "\r\n", 2);
+  
+}
+
+static void web_event_handler(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+  if (ev == MG_EV_HTTP_MSG) {
+    struct mg_http_message *hm = (struct mg_http_message *) ev_data;
+    if (mg_http_match_uri(hm, "/")) {
+      handle_home(c);
+    } else if (mg_http_match_uri(hm, "/api/video1")) {
+    c->data[0] = 'S';  // Mark that connection as live streamer
+    mg_printf(
+        c, "%s",
+        "HTTP/1.0 200 OK\r\n"
+        "Cache-Control: no-cache\r\n"
+        "Pragma: no-cache\r\nExpires: Thu, 01 Dec 1994 16:00:00 GMT\r\n"
+        "Content-Type: multipart/x-mixed-replace; boundary=--foo\r\n\r\n");
+  } else if(mg_http_match_uri(hm, "/api/images/left"))  {
+    handle_get_image(c, CameraId::left);
+  } else if(mg_http_match_uri(hm, "/api/images/right"))  {
+    handle_get_image(c, CameraId::right);
+  }else {
+      handle_not_found(c);
+    }
+  }
+  (void) fn_data;
+}
 
 int main(void) {
 
-  StereoCamera * camera;
-
-#if __linux__
   camera = new StereoCamera();
-  camera->capture();
-#else
-  camera = nullptr;
-#endif
 
-  WebServer server(camera);
+
+  camera->run();
+
 
   struct mg_mgr mgr;                            // Event manager
   mg_log_set(MG_LL_DEBUG);              // Set log level
   mg_mgr_init(&mgr);                            // Initialise event manager
-  mg_http_listen(&mgr, s_http_addr, server.web_event_handler, NULL);  // Create HTTP listener
+  mg_http_listen(&mgr, s_http_addr, web_event_handler, NULL);  // Create HTTP listener
   for (;;) mg_mgr_poll(&mgr, 1000);                    // Infinite event loop
   mg_mgr_free(&mgr);
+  
+  camera->stop();
+  camera->release();
 
-  // camera->release();
   return 0;
 }
