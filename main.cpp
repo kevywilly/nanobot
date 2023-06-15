@@ -21,7 +21,7 @@
 #include "parson.h"
 #include "mongoose.h"
 
-enum CameraId {left, right};
+enum CameraId {left, right, stereo};
 
 static const char *s_http_addr = "http://0.0.0.0:8000";    // HTTP port
 static const char * JSON_HEADER = "Content-Type: application/json\r\n";
@@ -55,10 +55,16 @@ static void handle_not_found(struct mg_connection *c) {
 
 static void handle_get_image(struct mg_connection *c, CameraId id) {
   std::vector<uchar> buf;
-  if(id == CameraId::left)
-    nano::bgr8_to_jpeg(camera->value1, buf);
-  else
-    nano::bgr8_to_jpeg(camera->value2, buf);
+  switch(id) {
+    case CameraId::left:
+      nano::bgr8_to_jpeg(camera->value1, buf);
+      break;
+    case CameraId::right:
+      nano::bgr8_to_jpeg(camera->value2, buf);
+      break;
+    default:
+      nano::stereo_to_jpeg(camera->value1, camera->value2, buf);
+  }
 
   size_t size = buf.size();
 
@@ -92,6 +98,8 @@ static void web_event_handler(struct mg_connection *c, int ev, void *ev_data, vo
     handle_get_image(c, CameraId::left);
   } else if(mg_http_match_uri(hm, "/api/images/right"))  {
     handle_get_image(c, CameraId::right);
+  } else if(mg_http_match_uri(hm, "/api/images/stereo"))  {
+    handle_get_image(c, CameraId::stereo);
   }else {
       handle_not_found(c);
     }
