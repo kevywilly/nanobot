@@ -14,7 +14,9 @@
 #include <atomic>
 #include <functional>
 #include <chrono>
+#include <vector>
 #include "imagemapper.h"
+#include "nanoutils.h"
 using namespace std;
 
 class StereoCamera {
@@ -33,6 +35,8 @@ public:
 
     cv::VideoCapture * cap1;
     cv::VideoCapture * cap2;
+
+    vector<uchar> jpeg;
 
     ImageMapper * mapper;
 
@@ -64,8 +68,6 @@ public:
         if(!r1 || !r2) {
             printf("...FAIL");
         } else {
-            cv::imwrite("v1.jpeg",value1);
-            cv::imwrite("v2.jpeg",value2);
             printf("...SUCCESS.\n\n");
         }
     }
@@ -126,7 +128,7 @@ public:
 
         while(true) {
             try {
-                std::this_thread::sleep_for(std::chrono::milliseconds(500));
+                usleep(50);
                 _read();
             } catch (...) {
                 
@@ -165,18 +167,22 @@ public:
         cv::Mat img2;
 
         if(cap1->isOpened() && cap2->isOpened()) {
-            bool r1 = cap1->read(img1);
-            bool r2 = cap2->read(img2);
+            bool r1 = cap1->read(value1);
+            bool r2 = cap2->read(value2);
             if(r1 && r2) {
-                img1.copyTo(value1);
-                img2.copyTo(value2);
+
                 mapper->remap(value1, value2, mapped_left, mapped_right);
                 mapper->map_3d(mapped_left, mapped_right, mapped_3d);
+                nano::bgr8_to_jpeg(mapped_3d, jpeg);
                 return true;
             }
         }
         return false;
     
+    }
+
+    char * get_image() {
+        return (char*)jpeg.data();
     }
 
     void abortAndJoin()

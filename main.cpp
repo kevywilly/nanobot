@@ -22,6 +22,9 @@
 #include "globals.h"
 #include "parson.h"
 #include "mongoose.h"
+#include <functional>
+#include <iostream>
+#include <string>
 
 
 enum CameraId {left, right, stereo, stereo3d};
@@ -65,7 +68,6 @@ static void handle_home(struct mg_connection *c) {
 
 }
 
-
 static void handle_not_found(struct mg_connection *c) {
   JSON_Value *root_value = json_value_init_object();
   JSON_Object *root_object = json_value_get_object(root_value);
@@ -77,6 +79,11 @@ static void handle_not_found(struct mg_connection *c) {
   json_free_serialized_string(body);
   json_value_free(root_value);
 }
+
+typedef struct  {
+  const char * data;
+  size_t size;
+}sinkdata;
 
 static void handle_get_image(struct mg_connection *c, CameraId id) {
   std::vector<uchar> buf;
@@ -106,29 +113,36 @@ static void handle_get_image(struct mg_connection *c, CameraId id) {
   
 }
 
-
 static void handle_get_stream(struct mg_connection *c) {
+
+  c->data[0] = 'S';
   mg_printf(
         c, "%s",
         "HTTP/1.0 200 OK\r\n"
         "Cache-Control: no-cache\r\n"
         "Pragma: no-cache\r\nExpires: Thu, 01 Dec 1994 16:00:00 GMT\r\n"
-        "Content-Type: multipart/x-mixed-replace; boundary=--foo\r\n\r\n");
-   
-        std::vector<uchar> buf;
-        while(1) {
-        nano::bgr8_to_jpeg(camera->mapped_3d, buf);
-        size_t size = buf.size();
-        
-        if(size > 0) {
-          mg_http_reply(c, 200, "--foo\r\nContent-Type: image/jpeg\r\n", "%.*s\n", (unsigned long) size, (char*)buf.data());
-    
-        }
-        }
+        "Content-Type: multipart/x-mixed-replace; boundary=--frame\r\n\r\n");
 
-        
-        
+}
+static void broadcast_stream(struct mg_mgr * mgr) {
+  auto img = camera->jpeg;
+  size_t size = img.size();
+  struct mg_connection *c;
+  for (c = mgr->conns; c != NULL; c = c->next) {
+    if(c->data[0] != 'S') continue;
+    if(size == 0) continue;
+    mg_printf(c,
+                "--frame\r\nContent-Type: image/jpeg\r\n"
+                "Content-Length: %lu\r\n\r\n",
+                (unsigned long) size);
+    mg_send(c, (char*)img.data(), size);
+    mg_send(c, "\r\n", 2);
 
+  }
+
+}
+static void timer_callback(void *arg) {
+  broadcast_stream((struct mg_mgr *)arg);
 }
 
 static void web_event_handler(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
@@ -163,14 +177,14 @@ int main(void) {
 
   camera->run();
 
-  struct mg_mgr mgr;                            // Event manager
+  struct mg_mgr mgr;                            
 
-  mg_log_set(MG_LL_DEBUG);                        // Set log level
-  mg_mgr_init(&mgr);                              // Initialise event manager
-  mg_http_listen(&mgr, s_http_addr, web_event_handler, NULL);  // Create HTTP listener
-  
+  mg_log_set(MG_LL_DEBUG);                        
+  mg_mgr_init(&mgr); 
+  mg_timer_add(&mgr, 33, MG_TIMER_REPEAT, timer_callback, &mgr);                             
+  mg_http_listen(&mgr, s_http_addr, web_event_handler, NULL); 
 
-  for (;;) mg_mgr_poll(&mgr, 1000);                    // Infinite event loop
+  for (;;) mg_mgr_poll(&mgr, 1000);                    
 
   mg_mgr_free(&mgr);
   

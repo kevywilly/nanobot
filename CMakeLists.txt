@@ -14,8 +14,9 @@ set(CMAKE_THREAD_LIBS_INIT "-lpthread")
 
 
 # specify the C++ standard
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
-set(CMAKE_CXX_FLAGS "-fPIC -g -pedantic -Wall -Wextra -pthread -std=c++20")
+set(CMAKE_CXX_FLAGS "-fPIC -g -pedantic -Wall -Wextra -pthread -lboost_coroutine -lboost_thread")
 set(CMAKE_HAVE_THREADS_LIBRARY 1)
 set(CMAKE_USE_WIN32_THREADS_INIT 0)
 set(CMAKE_USE_PTHREADS_INIT 1)
@@ -28,10 +29,13 @@ endif()
 find_package(OpenCV 4.5 REQUIRED)
 include_directories(${OpenCV_INCLUDE_DIR} src)
 
+FIND_PACKAGE( Boost COMPONENTS thread coroutine REQUIRED )
+INCLUDE_DIRECTORIES( ${Boost_INCLUDE_DIR} )
+
 #add_subdirectory(CSI_Camera)
 #include_directories(CSI_Camera/src)
 #include_directories(src)
 
 # Build the calibration tool
 add_executable(nanobot main.cpp  src/mongoose.c src/parson.c)
-target_link_libraries(nanobot ${OpenCV_LIBRARIES})
+target_link_libraries(nanobot ${OpenCV_LIBRARIES} Boost::thread Boost::coroutine)
