@@ -24,17 +24,39 @@
 enum CameraId {left, right, stereo};
 
 static const char *s_http_addr = "http://0.0.0.0:8000";    // HTTP port
-static const char * JSON_HEADER = "Content-Type: application/json\r\n";
+static const char * JSON_HEADER = (
+  "Access-Control-Allow-Origin: *\r\n"
+  "Content-Type: application/json\r\n");
 static const char * JPEG_HEADER = "Content-Type: image/jpeg\r\n";
+static const char * MAIN_HEADER = ("HTTP/1.0 200 OK\r\n"
+          "Cache-Control: no-cache\r\n"
+          "Pragma: no-cache\r\nExpires: Thu, 01 Dec 1994 16:00:00 GMT\r\n"
+          "Access-Control-Allow-Origin: *\r\n");
 
+static void add_default_headers(struct mg_connection *c){
+  mg_printf(c, MAIN_HEADER);
+} 
+
+static void add_jpeg_header(struct mg_connection *c) {
+  mg_printf(c, JPEG_HEADER);
+}
+
+static void add_json_header(struct mg_connection *c) {
+  mg_printf(c, JSON_HEADER);
+}
+
+static void add_size_header(struct mg_connection *c, size_t size) {
+  mg_printf(c,"Content-Length: %lu\r\n\r\n", size);
+}
+
+          
 static void handle_home(struct mg_connection *c) {
   JSON_Value *root_value = json_value_init_object();
   JSON_Object *root_object = json_value_get_object(root_value);
   char *body = NULL;
   json_object_set_string(root_object, "status", "Hello");
   body = json_serialize_to_string(root_value);
-  mg_http_reply(c, 200, JSON_HEADER,
-                body);
+  mg_http_reply(c, 200, JSON_HEADER, body);
   json_free_serialized_string(body);
   json_value_free(root_value);
 
@@ -68,14 +90,9 @@ static void handle_get_image(struct mg_connection *c, CameraId id) {
 
   size_t size = buf.size();
 
-  mg_printf(
-          c, "%s",
-          "HTTP/1.0 200 OK\r\n"
-          "Cache-Control: no-cache\r\n"
-          "Pragma: no-cache\r\nExpires: Thu, 01 Dec 1994 16:00:00 GMT\r\n"
-          "Content-Type: image/jpeg\r\n"
-          );
-  mg_printf(c,"Content-Length: %lu\r\n\r\n", size);
+  add_default_headers(c);
+  add_jpeg_header(c);
+  add_size_header(c, size);
   mg_send(c, (char*)buf.data(), size);
   mg_send(c, "\r\n", 2);
   
